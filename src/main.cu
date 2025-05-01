@@ -3,6 +3,8 @@
 #include <vector>
 #include <cmath>
 #include <cuda_runtime.h>
+#include <fstream>
+#include <iomanip>
 
 #define G 6.674e-11
 #define SOFTENING 1e-9
@@ -10,12 +12,15 @@
 __device__ double3 operator+(double3 a, double3 b) {
     return make_double3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
+
 __device__ double3 operator-(double3 a, double3 b) {
     return make_double3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
+
 __device__ double3 operator*(double a, double3 b) {
     return make_double3(a * b.x, a * b.y, a * b.z);
 }
+
 __device__ double3 operator/(double3 a, double b) {
     return make_double3(a.x / b, a.y / b, a.z / b);
 }
@@ -71,6 +76,10 @@ int main(int argc, char** argv) {
     int print_freq = std::stoi(argv[4]);
     int block_size = std::stoi(argv[5]);
 
+    // Create output file for logging
+    std::ofstream log_file("nbody_output.tsv");
+    log_file << "Timestep\tIndex\tMass\t\tX\t\tY\t\tZ\t\tVx\t\tVy\t\tVz\n";
+
     Particle* d_particles;
     cudaMalloc(&d_particles, n * sizeof(Particle));
     cudaMemcpy(d_particles, particles.data(), n * sizeof(Particle), cudaMemcpyHostToDevice);
@@ -83,10 +92,40 @@ int main(int argc, char** argv) {
 
         if (step % print_freq == 0) {
             cudaMemcpy(particles.data(), d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost);
-            printState(particles);
+
+            // Print to console for debugging
+            std::cout << "Timestep: " << step << std::endl;
+            std::cout << "Index\tMass\t\tX\t\tY\t\tZ\t\tVx\t\tVy\t\tVz\n";
+
+            int print_limit = std::min(n, 10);  // Limit output to first 10 particles
+
+            for (int i = 0; i < print_limit; ++i) {
+                std::cout << i << "\t"
+                          << particles[i].mass << "\t"
+                          << particles[i].position.x << "\t"
+                          << particles[i].position.y << "\t"
+                          << particles[i].position.z << "\t"
+                          << particles[i].velocity.x << "\t"
+                          << particles[i].velocity.y << "\t"
+                          << particles[i].velocity.z << std::endl;
+
+                // Log to file in tab-separated format
+                log_file << step << "\t" 
+                         << i << "\t" 
+                         << particles[i].mass << "\t"
+                         << particles[i].position.x << "\t"
+                         << particles[i].position.y << "\t"
+                         << particles[i].position.z << "\t"
+                         << particles[i].velocity.x << "\t"
+                         << particles[i].velocity.y << "\t"
+                         << particles[i].velocity.z << "\n";
+            }
+            std::cout << std::endl;
         }
     }
 
     cudaFree(d_particles);
+    log_file.close();  // Close the log file
+
     return 0;
 }
